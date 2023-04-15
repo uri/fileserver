@@ -27,7 +27,7 @@ func die[T any](v T, err error) T {
 }
 
 var fNgrokAPIToken = flag.String("ngrok", "", "Ngrok API token")
-var fPrefix = flag.String("prefix", "192.168.100.0/24", "subnet to use for local server")
+var fPrefix = flag.String("prefix", "192.168.0.0/16", "subnet to use for local server")
 var fPort = flag.String("port", "8080", "local port to serve")
 
 func main() {
