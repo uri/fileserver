@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -19,22 +20,14 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-func die[T any](v T, err error) T {
-	if err != nil {
-		log.Fatal(err)
-	}
-	return v
-}
-
 var fNgrokAPIToken = flag.String("ngrok", "", "Ngrok API token")
 var fPrefix = flag.String("prefix", "192.168.0.0/16", "subnet to use for local server")
 var fPort = flag.String("port", "8080", "local port to serve")
+var fLogLevel = flag.String("log", "", "log level: info|debug")
 
 func main() {
 	flag.Parse()
-
-	logger := slog.New(slog.NewTextHandler(os.Stderr))
-	slog.SetDefault(logger)
+	setupLoggers()
 
 	dir := die(os.Getwd())
 	slog.Info("Serving directory", "dir", dir)
@@ -46,6 +39,27 @@ func main() {
 	} else {
 		launchLocalServer(fshandler)
 	}
+}
+
+func setupLoggers() {
+	var logger *slog.Logger
+
+	if *fLogLevel != "" {
+		var opts *slog.HandlerOptions
+
+		switch *fLogLevel {
+		case "debug":
+			opts = &slog.HandlerOptions{Level: slog.LevelDebug}
+		case "info":
+			opts = &slog.HandlerOptions{Level: slog.LevelInfo}
+		}
+
+		logger = slog.New(slog.NewTextHandler(os.Stderr, opts))
+	} else {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+
+	slog.SetDefault(logger)
 }
 
 func launchNgrokServer(handler http.Handler, token string) {
@@ -70,14 +84,15 @@ func generateUniqueParam() string {
 
 func launchLocalServer(handler http.Handler) {
 	portNum := die(strconv.Atoi(*fPort))
-	address := die(GetOutboundIP())
+	address := die(getOutboundIP())
 
 	http.Handle("/", handler)
 
 	for i := 0; i < 20; i++ {
 		port := fmt.Sprintf(":%d", portNum+i)
 		u := fmt.Sprintf("http://%s%s?v=%s\n", address, port, generateUniqueParam())
-		log.Printf("Serving fiel server at %s\n", u)
+		slog.Info("Serving file server", "url", u)
+
 		fmt.Println(u)
 
 		err := http.ListenAndServe(port, nil)
@@ -87,7 +102,7 @@ func launchLocalServer(handler http.Handler) {
 	}
 }
 
-func GetOutboundIP() (string, error) {
+func getOutboundIP() (string, error) {
 	prefix := die(netip.ParsePrefix(*fPrefix))
 	prefix = prefix.Masked()
 
@@ -99,7 +114,7 @@ func GetOutboundIP() (string, error) {
 			case *net.IPNet:
 				if ip4 := v.IP.To4(); ip4 != nil {
 					ip := die(netip.ParseAddr(v.IP.String()))
-					slog.Info("Found IP", "ip", ip, "prefix", prefix)
+					slog.Debug("Found IP", "ip", ip, "prefix", prefix)
 					if prefix.Contains(ip) {
 						return ip.String(), nil
 					}
@@ -107,7 +122,7 @@ func GetOutboundIP() (string, error) {
 			case *net.IPAddr:
 				if ip4 := v.IP.To4(); ip4 != nil {
 					ip := die(netip.ParseAddr(v.IP.String()))
-					slog.Info("Found IP", "ip", ip, "prefix", prefix)
+					slog.Debug("Found IP", "ip", ip, "prefix", prefix)
 					if prefix.Contains(ip) {
 						return ip.String(), nil
 					}
@@ -117,4 +132,12 @@ func GetOutboundIP() (string, error) {
 	}
 
 	return "", errors.New("not found")
+}
+
+func die[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+
+	return v
 }
