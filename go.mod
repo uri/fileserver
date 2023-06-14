@@ -1,4 +1,4 @@
-module fileserver
+module github.com/uri/fileserver
 
 go 1.20
 
