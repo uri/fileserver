@@ -3,6 +3,10 @@
 A simple file server to share files on a local network or on the internet using
 [ngrok](https://ngrok.com/).
 
+## Requirements
+
+Go 1.20
+
 ## Install
 
 ```
